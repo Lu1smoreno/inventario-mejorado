@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Inventario</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: #eef2fb; }
+        .dashboard { max-width: 900px; margin: 2.5em auto; background: #fff; border-radius: 14px; box-shadow: 0 2px 16px #446ccc20; padding: 2em 2.5em; }
+        .kpi-cards {
+            display: flex;
+            gap: 1.2em;         /* Reduce gap for tighter fit */
+            justify-content: space-around;
+            margin-bottom: 2em;
+            flex-wrap: wrap;    /* Allow wrapping if not enough space */
+        }
+        .kpi {
+            background: #446ccc;
+            color: #fff;
+            border-radius: 12px;
+            padding: 1.2em 1em; /* Reduce padding */
+            flex: 1 1 130px;    /* Minimum width, cards can shrink more */
+            max-width: 170px;   /* Prevent cards from getting too wide */
+            text-align: center;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .kpi:hover { background: #264499; }
+        .actions { text-align: right; margin-bottom: 1em; }
+        button { background: #446ccc; color: #fff; border: none; border-radius: 7px; padding: 10px 25px; font-size: 1.1em; font-weight: 600; margin-left: 1em; cursor: pointer; transition: background .2s; }
+        button:hover { background: #264499; }
+        table { width: 100%; border-collapse: collapse; margin-top: 2em; }
+        th, td { border: 1px solid #bbc6e6; padding: .7em 1em; text-align: center; }
+        th { background: #f7faff; cursor:pointer; }
+        .center { text-align: center; }
+        .filter-row input {
+            width: 90%;
+            padding: 4px 8px;
+            font-size: .97em;
+            border-radius: 5px;
+            border: 1px solid #bbc6e6;
+            margin-bottom: 3px;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0 5px 0;
+            gap: 10px;
+        }
+        .pagination button {
+            padding: 7px 15px;
+            font-size: 1em;
+            margin: 0;
+        }
+        .sort-indicator {
+            font-size: 0.8em;
+            margin-left: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h2 class="center">Dashboard de <span id="clienteNombre"></span></h2>
+        <div class="actions">
+            <button onclick="exportarExcel()">Exportar a Excel</button>
+        </div>
+        <div class="kpi-cards">
+            <div class="kpi" id="kpiRefs" onclick="mostrarDetalle('refs')">
+                <div style="font-size:2em;" id="totalRefs">--</div>
+                <div>Referencias</div>
+            </div>
+            <div class="kpi" id="kpiInventario" onclick="mostrarDetalle('inventario')">
+                <div style="font-size:2em;" id="valorInventario">--</div>
+                <div>Valor Inventario</div>
+            </div>
+            <div class="kpi" id="kpiVentas" onclick="mostrarDetalle('ventas')">
+                <div style="font-size:2em;" id="ventasNeto">--</div>
+                <div>Ventas Neto</div>
+            </div>
+            <div class="kpi" id="kpiMargen" onclick="mostrarDetalle('margen')">
+                <div style="font-size:2em;" id="margen">--</div>
+                <div>Margen Promedio</div>
+            </div>
+            <div class="kpi" id="kpiCuota" onclick="mostrarDetalle('cuota')">
+                <div style="font-size:2em;" id="cuota">--</div>
+                <div>Cuota Mercado</div>
+            </div>
+        </div>
+        <!-- Example Chart (can be expanded) -->
+        <div style="margin:2em 0;">
+            <canvas id="ventasChart" height="120"></canvas>
+        </div>
+        <h3>Recomendaciones</h3>
+        <div class="pagination" id="tablePagination" style="display:none;">
+            <button id="prevPageBtn" onclick="changePage(-1)">Anterior</button>
+            <span id="pageIndicator"></span>
+            <button id="nextPageBtn" onclick="changePage(1)">Siguiente</button>
+        </div>
+        <table id="tablaRecs">
+            <thead>
+                <tr class="filter-row">
+                    <th><input type="text" id="filterCod" placeholder="Filtrar..." oninput="applyFilters()" /></th>
+                    <th><input type="text" id="filterDesc" placeholder="Filtrar..." oninput="applyFilters()" /></th>
+                    <th><input type="text" id="filterStock" placeholder="Filtrar..." oninput="applyFilters()" /></th>
+                    <th><input type="text" id="filterVentasCliente" placeholder="Filtrar..." oninput="applyFilters()" /></th>
+                    <th><input type="text" id="filterVentasMercado" placeholder="Filtrar..." oninput="applyFilters()" /></th>
+                    <th><input type="text" id="filterAlerta" placeholder="Filtrar..." oninput="applyFilters()" /></th>
+                </tr>
+                <tr>
+                    <th onclick="sortTable('cod')">Código <span class="sort-indicator" id="sortCod"></span></th>
+                    <th onclick="sortTable('desc')">Descripción <span class="sort-indicator" id="sortDesc"></span></th>
+                    <th onclick="sortTable('stock')">Stock <span class="sort-indicator" id="sortStock"></span></th>
+                    <th onclick="sortTable('ventasCliente')">Ventas Cliente <span class="sort-indicator" id="sortVentasCliente"></span></th>
+                    <th onclick="sortTable('ventasMercado')">Ventas Mercado <span class="sort-indicator" id="sortVentasMercado"></span></th>
+                    <th onclick="sortTable('alertLabel')">Alerta <span class="sort-indicator" id="sortAlerta"></span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data rows inserted by JS -->
+            </tbody>
+        </table>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Load dashboard data from localStorage
+        const dashboardData = JSON.parse(localStorage.getItem('dashboardData') || '{}');
+        document.getElementById('clienteNombre').innerText = localStorage.getItem('nombreClienteDashboard') || 'Cliente';
+
+        // KPIs
+        document.getElementById('totalRefs').innerText = dashboardData.kpis?.totalRefs ?? '--';
+        document.getElementById('valorInventario').innerText = dashboardData.kpis?.valorInventario ?? '--';
+        document.getElementById('ventasNeto').innerText = dashboardData.kpis?.ventasNeto ?? '--';
+        document.getElementById('margen').innerText = dashboardData.kpis?.margen ?? '--';
+        document.getElementById('cuota').innerText = dashboardData.kpis?.cuota ?? '--';
+
+        // Chart (Top 10 ventas)
+        if (dashboardData.top10VentasLabels && dashboardData.top10VentasData) {
+            new Chart(document.getElementById('ventasChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.top10VentasLabels,
+                    datasets: [{
+                        label: 'Top 10 Ventas',
+                        data: dashboardData.top10VentasData,
+                        backgroundColor: '#446cccAA'
+                    }]
+                }
+            });
+            document.getElementById('ventasChart').onclick = () => mostrarDetalle('chart');
+        }
+
+        // Table: Filtering, Sorting, Pagination State
+        let allRecs = Array.isArray(dashboardData.recs) ? dashboardData.recs : [];
+        let filteredRecs = [...allRecs];
+        let currentSort = { column: null, asc: true };
+        let currentPage = 1;
+        const pageSize = 15;
+
+        function renderTable() {
+            const tbody = document.getElementById('tablaRecs').querySelector('tbody');
+            tbody.innerHTML = '';
+            // Pagination
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, filteredRecs.length);
+            for (let i = startIdx; i < endIdx; i++) {
+                const rec = filteredRecs[i];
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${rec.cod}</td><td>${rec.desc}</td><td>${rec.stock}</td><td>${rec.ventasCliente}</td><td>${rec.ventasMercado}</td><td>${rec.alertLabel}</td>`;
+                tbody.appendChild(tr);
+            }
+            // Pagination controls
+            const paginationDiv = document.getElementById('tablePagination');
+            if (filteredRecs.length > pageSize) {
+                paginationDiv.style.display = 'flex';
+                document.getElementById('pageIndicator').innerText = `Página ${currentPage} de ${Math.max(1, Math.ceil(filteredRecs.length / pageSize))}`;
+                document.getElementById('prevPageBtn').disabled = currentPage === 1;
+                document.getElementById('nextPageBtn').disabled = currentPage >= Math.ceil(filteredRecs.length / pageSize);
+            } else {
+                paginationDiv.style.display = 'none';
+            }
+        }
+
+        function changePage(dir) {
+            const maxPage = Math.max(1, Math.ceil(filteredRecs.length / pageSize));
+            currentPage = Math.max(1, Math.min(currentPage + dir, maxPage));
+            renderTable();
+        }
+
+        function applyFilters() {
+            // Get filter values
+            const filterCod = document.getElementById('filterCod').value.toLowerCase();
+            const filterDesc = document.getElementById('filterDesc').value.toLowerCase();
+            const filterStock = document.getElementById('filterStock').value.toLowerCase();
+            const filterVentasCliente = document.getElementById('filterVentasCliente').value.toLowerCase();
+            const filterVentasMercado = document.getElementById('filterVentasMercado').value.toLowerCase();
+            const filterAlerta = document.getElementById('filterAlerta').value.toLowerCase();
+            filteredRecs = allRecs.filter(rec => 
+                (rec.cod + '').toLowerCase().includes(filterCod) &&
+                (rec.desc + '').toLowerCase().includes(filterDesc) &&
+                (rec.stock + '').toLowerCase().includes(filterStock) &&
+                (rec.ventasCliente + '').toLowerCase().includes(filterVentasCliente) &&
+                (rec.ventasMercado + '').toLowerCase().includes(filterVentasMercado) &&
+                (rec.alertLabel + '').toLowerCase().includes(filterAlerta)
+            );
+            currentPage = 1;
+            // Re-sort after filtering
+            if (currentSort.column) sortTable(currentSort.column, true);
+            else renderTable();
+        }
+
+        function sortTable(column, keepOrder=false) {
+            if (!keepOrder) {
+                if (currentSort.column === column) {
+                    currentSort.asc = !currentSort.asc;
+                } else {
+                    currentSort.column = column;
+                    currentSort.asc = true;
+                }
+            }
+            // Update sort indicators
+            ['cod','desc','stock','ventasCliente','ventasMercado','alertLabel'].forEach(col => {
+                document.getElementById('sort'+capitalize(col)).innerText = (currentSort.column === col)
+                    ? (currentSort.asc ? '▲' : '▼') : '';
+            });
+            filteredRecs.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                // Try numeric sort if possible
+                if (!isNaN(Number(valA)) && !isNaN(Number(valB))) {
+                    valA = Number(valA); valB = Number(valB);
+                } else {
+                    valA = (valA+'').toLowerCase();
+                    valB = (valB+'').toLowerCase();
+                }
+                if (valA < valB) return currentSort.asc ? -1 : 1;
+                if (valA > valB) return currentSort.asc ? 1 : -1;
+                return 0;
+            });
+            currentPage = 1;
+            renderTable();
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Initial render
+        applyFilters();
+
+        // Detail Modal logic (for KPIs and chart)
+        function mostrarDetalle(tipo) {
+            switch (tipo) {
+                case 'refs':
+                    Swal.fire('Detalle de Referencias', `Total de referencias: <b>${dashboardData.kpis?.totalRefs ?? '--'}</b><br>
+                    <small>Cada referencia es un producto único en inventario.</small>`, 'info');
+                    break;
+                case 'inventario':
+                    Swal.fire('Valor del Inventario', `Valor total de inventario: <b>${dashboardData.kpis?.valorInventario ?? '--'}</b><br>
+                    <small>Incluye todos los productos activos en stock.</small>`, 'info');
+                    break;
+                case 'ventas':
+                    Swal.fire('Ventas Neto', `Ventas netas del periodo: <b>${dashboardData.kpis?.ventasNeto ?? '--'}</b><br>
+                    <small>Corresponde a la suma de ventas de todos los productos.</small>`, 'info');
+                    break;
+                case 'margen':
+                    Swal.fire('Margen Promedio', `Margen promedio: <b>${dashboardData.kpis?.margen ?? '--'}</b><br>
+                    <small>Calculado como promedio ponderado según el inventario y ventas.</small>`, 'info');
+                    break;
+                case 'cuota':
+                    Swal.fire('Cuota de Mercado', `Cuota de mercado: <b>${dashboardData.kpis?.cuota ?? '--'}</b><br>
+                    <small>Relación entre ventas del cliente y ventas totales del mercado.</small>`, 'info');
+                    break;
+                case 'chart':
+                    Swal.fire('Top 10 Ventas', `
+                        <b>Códigos más vendidos:</b><br>
+                        ${dashboardData.top10VentasLabels.map((label, i) =>
+                            `<b>${label}:</b> ${dashboardData.top10VentasData[i]} uds.`).join('<br>')}
+                    `, 'info');
+                    break;
+                default: break;
+            }
+        }
+
+        // Export to Excel logic
+        function exportarExcel() {
+            if (!dashboardData || !dashboardData.recs) {
+                Swal.fire('Error', 'No hay datos para exportar.', 'error');
+                return;
+            }
+            // Prepare sheet: KPIs + Recommendations
+            const kpiSheet = [
+                ['KPI', 'Valor'],
+                ['Total Refs', dashboardData.kpis?.totalRefs ?? ''],
+                ['Valor Inventario', dashboardData.kpis?.valorInventario ?? ''],
+                ['Ventas Neto', dashboardData.kpis?.ventasNeto ?? ''],
+                ['Stock Muerto', dashboardData.kpis?.stockMuerto ?? ''],
+                ['Stock Crítico', dashboardData.kpis?.stockCritico ?? ''],
+                ['Cuota', dashboardData.kpis?.cuota ?? ''],
+                ['Margen', dashboardData.kpis?.margen ?? '']
+            ];
+            const recSheet = [
+                ['Código', 'Descripción', 'Stock', 'Coste', 'Venta', 'Ventas Cliente', 'Ventas Mercado', 'Alerta'],
+                ...dashboardData.recs.map(r => [
+                    r.cod, r.desc, r.stock, r.coste, r.venta, r.ventasCliente, r.ventasMercado, r.alertLabel
+                ])
+            ];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiSheet), 'KPIs');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recSheet), 'Recomendaciones');
+            XLSX.writeFile(wb, `Dashboard_${dashboardData.nombreCliente || 'Cliente'}.xlsx`);
+        }
+    </script>
+</body>
+</html>
