@@ -7,9 +7,25 @@
     <style>
         body { margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: #eef2fb; }
         .dashboard { max-width: 900px; margin: 2.5em auto; background: #fff; border-radius: 14px; box-shadow: 0 2px 16px #446ccc20; padding: 2em 2.5em; }
-        .kpi-cards { display: flex; gap: 2em; justify-content: space-around; margin-bottom: 2em; }
-        .kpi { background: #446ccc; color: #fff; border-radius: 12px; padding: 1.5em 2em; flex: 1 1 0; text-align: center; cursor: pointer; transition: background .2s; }
-        .kpi:hover { background: #264499; }
+       .kpi-cards {
+    display: flex;
+    gap: 1.2em;         /* Reduce gap for tighter fit */
+    justify-content: space-around;
+    margin-bottom: 2em;
+    flex-wrap: wrap;    /* Allow wrapping if not enough space */
+}
+.kpi {
+    background: #446ccc;
+    color: #fff;
+    border-radius: 12px;
+    padding: 1.2em 1em; /* Reduce padding */
+    flex: 1 1 130px;    /* Minimum width, cards can shrink more */
+    max-width: 170px;   /* Prevent cards from getting too wide */
+    text-align: center;
+    cursor: pointer;
+    transition: background .2s;
+}
+.kpi:hover { background: #264499; }
         .actions { text-align: right; margin-bottom: 1em; }
         button { background: #446ccc; color: #fff; border: none; border-radius: 7px; padding: 10px 25px; font-size: 1.1em; font-weight: 600; margin-left: 1em; cursor: pointer; transition: background .2s; }
         button:hover { background: #264499; }
