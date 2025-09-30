@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Inventario</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: #eef2fb; }
+        .dashboard { max-width: 900px; margin: 2.5em auto; background: #fff; border-radius: 14px; box-shadow: 0 2px 16px #446ccc20; padding: 2em 2.5em; }
+        .kpi-cards { display: flex; gap: 2em; justify-content: space-around; margin-bottom: 2em; }
+        .kpi { background: #446ccc; color: #fff; border-radius: 12px; padding: 1.5em 2em; flex: 1 1 0; text-align: center; cursor: pointer; transition: background .2s; }
+        .kpi:hover { background: #264499; }
+        .actions { text-align: right; margin-bottom: 1em; }
+        button { background: #446ccc; color: #fff; border: none; border-radius: 7px; padding: 10px 25px; font-size: 1.1em; font-weight: 600; margin-left: 1em; cursor: pointer; transition: background .2s; }
+        button:hover { background: #264499; }
+        table { width: 100%; border-collapse: collapse; margin-top: 2em; }
+        th, td { border: 1px solid #bbc6e6; padding: .7em 1em; text-align: center; }
+        th { background: #f7faff; }
+        .center { text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h2 class="center">Dashboard de <span id="clienteNombre"></span></h2>
+        <div class="actions">
+            <button onclick="exportarExcel()">Exportar a Excel</button>
+        </div>
+        <div class="kpi-cards">
+            <div class="kpi" id="kpiRefs" onclick="mostrarDetalle('refs')">
+                <div style="font-size:2em;" id="totalRefs">--</div>
+                <div>Referencias</div>
+            </div>
+            <div class="kpi" id="kpiInventario" onclick="mostrarDetalle('inventario')">
+                <div style="font-size:2em;" id="valorInventario">--</div>
+                <div>Valor Inventario</div>
+            </div>
+            <div class="kpi" id="kpiVentas" onclick="mostrarDetalle('ventas')">
+                <div style="font-size:2em;" id="ventasNeto">--</div>
+                <div>Ventas Neto</div>
+            </div>
+            <div class="kpi" id="kpiMargen" onclick="mostrarDetalle('margen')">
+                <div style="font-size:2em;" id="margen">--</div>
+                <div>Margen Promedio</div>
+            </div>
+            <div class="kpi" id="kpiCuota" onclick="mostrarDetalle('cuota')">
+                <div style="font-size:2em;" id="cuota">--</div>
+                <div>Cuota Mercado</div>
+            </div>
+        </div>
+        <!-- Example Chart (can be expanded) -->
+        <div style="margin:2em 0;">
+            <canvas id="ventasChart" height="120"></canvas>
+        </div>
+        <h3>Recomendaciones</h3>
+        <table id="tablaRecs">
+            <thead>
+                <tr>
+                    <th>Código</th><th>Descripción</th><th>Stock</th><th>Ventas Cliente</th><th>Ventas Mercado</th><th>Alerta</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data rows inserted by JS -->
+            </tbody>
+        </table>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Load dashboard data from localStorage
+        const dashboardData = JSON.parse(localStorage.getItem('dashboardData') || '{}');
+        document.getElementById('clienteNombre').innerText = localStorage.getItem('nombreClienteDashboard') || 'Cliente';
+
+        // Populate KPIs
+        document.getElementById('totalRefs').innerText = dashboardData.kpis?.totalRefs ?? '--';
+        document.getElementById('valorInventario').innerText = dashboardData.kpis?.valorInventario ?? '--';
+        document.getElementById('ventasNeto').innerText = dashboardData.kpis?.ventasNeto ?? '--';
+        document.getElementById('margen').innerText = dashboardData.kpis?.margen ?? '--';
+        document.getElementById('cuota').innerText = dashboardData.kpis?.cuota ?? '--';
+
+        // Chart (Top 10 ventas)
+        if (dashboardData.top10VentasLabels && dashboardData.top10VentasData) {
+            new Chart(document.getElementById('ventasChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.top10VentasLabels,
+                    datasets: [{
+                        label: 'Top 10 Ventas',
+                        data: dashboardData.top10VentasData,
+                        backgroundColor: '#446cccAA'
+                    }]
+                }
+            });
+            // Make chart clickable for details
+            document.getElementById('ventasChart').onclick = () => mostrarDetalle('chart');
+        }
+
+        // Recommendations table
+        const tbody = document.getElementById('tablaRecs').querySelector('tbody');
+        if (Array.isArray(dashboardData.recs)) {
+            dashboardData.recs.forEach(rec => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${rec.cod}</td><td>${rec.desc}</td><td>${rec.stock}</td><td>${rec.ventasCliente}</td><td>${rec.ventasMercado}</td><td>${rec.alertLabel}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Detail Modal logic (for KPIs and chart)
+        function mostrarDetalle(tipo) {
+            switch (tipo) {
+                case 'refs':
+                    Swal.fire('Detalle de Referencias', `Total de referencias: <b>${dashboardData.kpis?.totalRefs ?? '--'}</b><br>
+                    <small>Cada referencia es un producto único en inventario.</small>`, 'info');
+                    break;
+                case 'inventario':
+                    Swal.fire('Valor del Inventario', `Valor total de inventario: <b>${dashboardData.kpis?.valorInventario ?? '--'}</b><br>
+                    <small>Incluye todos los productos activos en stock.</small>`, 'info');
+                    break;
+                case 'ventas':
+                    Swal.fire('Ventas Neto', `Ventas netas del periodo: <b>${dashboardData.kpis?.ventasNeto ?? '--'}</b><br>
+                    <small>Corresponde a la suma de ventas de todos los productos.</small>`, 'info');
+                    break;
+                case 'margen':
+                    Swal.fire('Margen Promedio', `Margen promedio: <b>${dashboardData.kpis?.margen ?? '--'}</b><br>
+                    <small>Calculado como promedio ponderado según el inventario y ventas.</small>`, 'info');
+                    break;
+                case 'cuota':
+                    Swal.fire('Cuota de Mercado', `Cuota de mercado: <b>${dashboardData.kpis?.cuota ?? '--'}</b><br>
+                    <small>Relación entre ventas del cliente y ventas totales del mercado.</small>`, 'info');
+                    break;
+                case 'chart':
+                    Swal.fire('Top 10 Ventas', `
+                        <b>Códigos más vendidos:</b><br>
+                        ${dashboardData.top10VentasLabels.map((label, i) =>
+                            `<b>${label}:</b> ${dashboardData.top10VentasData[i]} uds.`).join('<br>')}
+                    `, 'info');
+                    break;
+                default: break;
+            }
+        }
+
+        // Export to Excel logic
+        function exportarExcel() {
+            if (!dashboardData || !dashboardData.recs) {
+                Swal.fire('Error', 'No hay datos para exportar.', 'error');
+                return;
+            }
+            // Prepare sheet: KPIs + Recommendations
+            const kpiSheet = [
+                ['KPI', 'Valor'],
+                ['Total Refs', dashboardData.kpis?.totalRefs ?? ''],
+                ['Valor Inventario', dashboardData.kpis?.valorInventario ?? ''],
+                ['Ventas Neto', dashboardData.kpis?.ventasNeto ?? ''],
+                ['Stock Muerto', dashboardData.kpis?.stockMuerto ?? ''],
+                ['Stock Crítico', dashboardData.kpis?.stockCritico ?? ''],
+                ['Cuota', dashboardData.kpis?.cuota ?? ''],
+                ['Margen', dashboardData.kpis?.margen ?? '']
+            ];
+            const recSheet = [
+                ['Código', 'Descripción', 'Stock', 'Coste', 'Venta', 'Ventas Cliente', 'Ventas Mercado', 'Alerta'],
+                ...dashboardData.recs.map(r => [
+                    r.cod, r.desc, r.stock, r.coste, r.venta, r.ventasCliente, r.ventasMercado, r.alertLabel
+                ])
+            ];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiSheet), 'KPIs');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recSheet), 'Recomendaciones');
+            XLSX.writeFile(wb, `Dashboard_${dashboardData.nombreCliente || 'Cliente'}.xlsx`);
+        }
+    </script>
+</body>
+</html>
